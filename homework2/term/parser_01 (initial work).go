@@ -1,0 +1,95 @@
+package term
+
+import (
+	"errors"
+	// "strconv"
+)
+
+// ErrParser is the error value returned by the Parser if the string is not a
+// valid term.
+// See also https://golang.org/pkg/errors/#New
+// and // https://golang.org/pkg/builtin/#error
+var ErrParser = errors.New("parser error")
+
+//
+// <start>		::= <term> | \epsilon
+// <term>		::= ATOM <pars> | NUM | VAR
+// <args>		::= <term> <otherargs>
+// <pars>		::= LPAR <args> RPAR | \epsilon
+// <otherargs>	::= COMMA <args> | \epsilon
+
+type ParserImpl struct {
+	lex          *lexer
+	peekTok      *Token
+	createdTerms []*Term
+}
+
+/* Helper functions */
+// Helper function which returns the next token.
+func (p *ParserImpl) nextToken() (*Token, error) {
+	if tok := p.peekTok; tok != nil {
+		p.peekTok = nil
+		return tok, nil
+	}
+
+	tok, err := p.lex.next()
+	if err != nil {
+		return nil, ErrParser
+	}
+
+	return tok, nil
+}
+
+// Helper function which puts a token back as the next token.
+func (p *ParserImpl) backToken(tok *Token) {
+	p.peekTok = tok
+}
+
+// Helper function to peek the next token.
+func (p *ParserImpl) peekToken() (*Token, error) {
+	tok, err := p.nextToken()
+	if err != nil {
+		return nil, ErrParser
+	}
+
+	p.backToken(tok)
+
+	return tok, nil
+}
+
+// Parser is the interface for the term parser.
+// Do not change the definition of this interface.
+type Parser interface {
+	Parse(string) (*Term, error)
+}
+
+// NewParser creates a struct of a type that satisfies the Parser interface.
+func NewParser() Parser {
+	return &ParserImpl{}
+}
+
+func (parser ParserImpl) Parse(input string) (*Term, error) {
+	lexer := newLexer(input)
+
+	// There are two cases, so we peek the next token.
+	tok, error := parser.peekToken()
+	if error != nil {
+		return nil, ErrParser
+	}
+
+	// <start> -> <bracket>
+	// Parse <bracket>.
+	expr, err := parser.termNT()
+	if err != nil {
+		return nil, ErrParser
+	}
+
+	// FOLLOW(<start>) = $
+	// Check the next token is the endmarker $, there should be nothing left
+	// after parsing <start>.
+	if nextTok, err := parser.nextToken(); err != nil || nextTok.typ != tokenEOF {
+		return nil, ErrParser
+	}
+
+	return expr, nil
+}
